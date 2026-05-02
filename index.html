@@ -245,11 +245,12 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 <!-- CONTROLS -->
 <div class="controls">
   <div class="ctrl-group">
-    <label>Date &amp; Time — type freely · 📅 opens calendar</label>
+    <label>Date &amp; Time — ✏️ type freely · 📅 calendar</label>
     <div class="dt-wrap" id="dtWrap">
-      <input type="text" id="dtText" class="dt-text" placeholder="YYYY-MM-DD HH:MM" title="Type date and time directly, e.g. 2150-05-10 12:00">
-      <button class="dt-cal-btn" title="Open calendar picker" tabindex="-1" onclick="triggerCal()"></button>
-      <input type="datetime-local" id="dtNative" class="dt-native" tabindex="-1" title="Open calendar">
+      <input type="text" id="dtText" class="dt-text" placeholder="YYYY-MM-DD HH:MM  (or just year: 2150)" title="Type any date: 2150-05-10 14:30 or just 2150">
+      <button class="dt-cal-btn" title="Open date calendar — click a date to jump there" tabindex="-1" onclick="triggerCal()"></button>
+      <!-- Date-only picker: cleaner, no time confusion, selecting a date closes immediately -->
+      <input type="date" id="dtNative" class="dt-native" tabindex="-1">
     </div>
   </div>
   <div class="ctrl-group">
@@ -692,9 +693,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   const dtNative=document.getElementById('dtNative');
 
   // Sync native → text display
+  // Date-only calendar picker: selecting a date closes immediately and preserves current time
   dtNative.addEventListener('change',()=>{
     if(!dtNative.value)return;
-    const d=new Date(dtNative.value);
+    // Parse the selected date (YYYY-MM-DD), keep existing H:M:S from currentDate
+    const parts=dtNative.value.split('-');
+    if(parts.length<3)return;
+    const d=new Date(currentDate.getTime()); // copy current time
+    d.setUTCFullYear(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+    // Update text box to show new date + preserved time
     dtText.value=formatDTText(d);
     isPaused=true;liveMode=false;stopLive();
     document.getElementById('pauseBtn').textContent='▶ Resume Live';
@@ -704,6 +711,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('yearSlider').value=0;
     document.getElementById('daySliderVal').textContent='±0d';
     document.getElementById('yearSliderVal').textContent='±0y';
+    // Reset picker value so same date can be re-selected if needed
+    dtNative.value='';
     render();
   });
 
@@ -745,9 +754,7 @@ function syncDTInputs(){
   if(document.activeElement!==dtText){
     dtText.value=formatDTText(currentDate);
   }
-  // Always sync the hidden native picker
-  const local=new Date(currentDate.getTime()-currentDate.getTimezoneOffset()*60000);
-  document.getElementById('dtNative').value=local.toISOString().slice(0,16);
+  // Native is date-only and reset after use — don't sync it continuously
 }
 
 // ═══════════════════════════════════
@@ -1124,70 +1131,94 @@ function drawWheel(){
   for(let i=0;i<12;i++){
     const a1=(i*30-90)*Math.PI/180,a2=((i+1)*30-90)*Math.PI/180,mid=((i*30+15)-90)*Math.PI/180;
     const s=SIGNS[i];
+    // Has a planet in this sign? Highlight it slightly
+    const hasPlanet=PLANETS.some(p=>{const pos=positions[p.id];return pos&&gsi(pos.lon)===i;});
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,a1,a2);ctx.closePath();
-    ctx.fillStyle=s.color+'09';ctx.fill();ctx.strokeStyle=s.color+'30';ctx.lineWidth=1;ctx.stroke();
-    ctx.save();ctx.font=`${R*0.063}px serif`;ctx.fillStyle='#5a5040';
+    ctx.fillStyle=hasPlanet?s.color+'14':s.color+'08';ctx.fill();
+    ctx.strokeStyle=s.color+'40';ctx.lineWidth=1;ctx.stroke();
+    ctx.save();
+    // Symbol — clearly visible gold-amber
+    ctx.font=`${R*0.065}px serif`;
+    ctx.fillStyle=hasPlanet?'rgba(232,200,100,.85)':'rgba(180,150,80,.6)';
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(s.sym,cx+Math.cos(mid)*R*0.83,cy+Math.sin(mid)*R*0.83);
-    ctx.font=`${R*0.038}px 'Cinzel',serif`;ctx.fillStyle='#32281a';
-    ctx.fillText(s.en.slice(0,4),cx+Math.cos(mid)*R*0.7,cy+Math.sin(mid)*R*0.7);
-    ctx.font=`${R*0.028}px 'Crimson Pro',serif`;ctx.fillStyle='#28201a';ctx.fontStyle='italic';
-    ctx.fillText(s.sa.slice(0,5),cx+Math.cos(mid)*R*0.59,cy+Math.sin(mid)*R*0.59);
+    ctx.fillText(s.sym,cx+Math.cos(mid)*R*0.84,cy+Math.sin(mid)*R*0.84);
+    // English name
+    ctx.font=`${R*0.038}px 'Cinzel',serif`;
+    ctx.fillStyle=hasPlanet?'rgba(220,200,140,.75)':'rgba(140,120,70,.55)';
+    ctx.fillText(s.en,cx+Math.cos(mid)*R*0.705,cy+Math.sin(mid)*R*0.705);
+    // Sanskrit name
+    ctx.font=`italic ${R*0.030}px 'Crimson Pro',serif`;
+    ctx.fillStyle=hasPlanet?'rgba(180,160,110,.65)':'rgba(120,100,60,.45)';
+    ctx.fillText(s.sa,cx+Math.cos(mid)*R*0.60,cy+Math.sin(mid)*R*0.60);
     ctx.restore();
   }
 
-  // Nakshatra ring
+  // Nakshatra ring — 27 segments with visible numbers and names
   const nakR=R*0.56;
   for(let i=0;i<27;i++){
     const deg=360/27,a1=(i*deg-90)*Math.PI/180,a2=((i+1)*deg-90)*Math.PI/180,mid=((i+.5)*deg-90)*Math.PI/180;
+    const hasPlanet=PLANETS.some(p=>{const pos=positions[p.id];return pos&&gni(pos.lon)===i;});
     ctx.beginPath();ctx.arc(cx,cy,nakR,a1,a2,false);ctx.arc(cx,cy,nakR*.78,a2,a1,true);ctx.closePath();
-    ctx.strokeStyle='#1a2340';ctx.lineWidth=0.8;ctx.stroke();
-    ctx.save();ctx.font=`${R*0.03}px 'JetBrains Mono',monospace`;ctx.fillStyle='#222a3a';
+    if(hasPlanet){ctx.fillStyle='rgba(63,184,196,.08)';ctx.fill();}
+    ctx.strokeStyle='#2a3858';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.save();
+    // Nakshatra number — clearly readable
+    ctx.font=`${R*0.032}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle=hasPlanet?'rgba(160,210,230,.80)':'rgba(100,140,180,.55)';
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(NAKSHATRAS[i].num,cx+Math.cos(mid)*nakR*.88,cy+Math.sin(mid)*nakR*.88);
-    // Nakshatra name at outer edge (abbreviated)
-    ctx.font=`${R*0.025}px 'Cinzel',serif`;ctx.fillStyle='#1a2230';
-    ctx.save();ctx.translate(cx+Math.cos(mid)*nakR*.67,cy+Math.sin(mid)*nakR*.67);
+    ctx.fillText(NAKSHATRAS[i].num,cx+Math.cos(mid)*nakR*.895,cy+Math.sin(mid)*nakR*.895);
+    // Nakshatra name — rotated along arc, clearly visible
+    ctx.font=`${R*0.027}px 'Cinzel',serif`;
+    ctx.fillStyle=hasPlanet?'rgba(140,200,220,.70)':'rgba(80,120,160,.50)';
+    ctx.save();
+    ctx.translate(cx+Math.cos(mid)*nakR*.685,cy+Math.sin(mid)*nakR*.685);
     ctx.rotate(mid+Math.PI/2);
-    ctx.fillText(NAKSHATRAS[i].name.slice(0,6),0,0);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(NAKSHATRAS[i].name.slice(0,7),0,0);
     ctx.restore();
     ctx.restore();
   }
 
-  // Degree ticks
+  // Degree ticks and labels
   for(let i=0;i<360;i+=5){
-    const a=(i-90)*Math.PI/180,r1=i%30===0?R*.87:i%10===0?R*.9:R*.92;
+    const a=(i-90)*Math.PI/180,r1=i%30===0?R*.87:i%10===0?R*.905:R*.925;
     ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1);
-    ctx.lineTo(cx+Math.cos(a)*R*.96,cy+Math.sin(a)*R*.96);
-    ctx.strokeStyle=i%30===0?'#2a3550':i%10===0?'#1a2540':'#141c30';
-    ctx.lineWidth=i%30===0?1.5:0.5;ctx.stroke();
+    ctx.lineTo(cx+Math.cos(a)*R*.955,cy+Math.sin(a)*R*.955);
+    ctx.strokeStyle=i%30===0?'rgba(100,130,200,.5)':i%10===0?'rgba(70,100,160,.4)':'rgba(40,60,100,.3)';
+    ctx.lineWidth=i%30===0?1.5:0.6;ctx.stroke();
   }
 
-  // Rashi boundary labels
+  // Rashi boundary degree labels
   for(let i=0;i<12;i++){
     const a=(i*30-90)*Math.PI/180;
-    ctx.save();ctx.font=`${R*0.02}px 'JetBrains Mono',monospace`;ctx.fillStyle='#2a3550';
+    ctx.save();ctx.font=`${R*0.022}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle='rgba(100,130,190,.55)';
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(`${i*30}°`,cx+Math.cos(a)*R*.975,cy+Math.sin(a)*R*.975);ctx.restore();
+    ctx.fillText(`${i*30}°`,cx+Math.cos(a)*R*.972,cy+Math.sin(a)*R*.972);ctx.restore();
   }
 
-  // Planets
+  // Planets — brighter spokes and names
   for(const p of PLANETS){
     const pos=positions[p.id];if(!pos)continue;
     const a=(pos.lon-90)*Math.PI/180,pr=R*.43,pr2=R*.032;
+    // Spoke line
     ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*R*.07,cy+Math.sin(a)*R*.07);
     ctx.lineTo(cx+Math.cos(a)*(pr-pr2*1.2),cy+Math.sin(a)*(pr-pr2*1.2));
-    ctx.strokeStyle=p.color+'40';ctx.lineWidth=0.8;ctx.stroke();
+    ctx.strokeStyle=p.color+'55';ctx.lineWidth=1;ctx.stroke();
+    // Glow
     const pg=ctx.createRadialGradient(cx+Math.cos(a)*pr,cy+Math.sin(a)*pr,0,cx+Math.cos(a)*pr,cy+Math.sin(a)*pr,pr2*2.5);
-    pg.addColorStop(0,p.color+'50');pg.addColorStop(1,p.color+'00');
+    pg.addColorStop(0,p.color+'60');pg.addColorStop(1,p.color+'00');
     ctx.beginPath();ctx.arc(cx+Math.cos(a)*pr,cy+Math.sin(a)*pr,pr2*2.5,0,Math.PI*2);ctx.fillStyle=pg;ctx.fill();
+    // Circle
     ctx.beginPath();ctx.arc(cx+Math.cos(a)*pr,cy+Math.sin(a)*pr,pr2,0,Math.PI*2);
-    ctx.fillStyle=p.bg;ctx.fill();ctx.strokeStyle=p.color+'90';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.save();ctx.font=`${pr2*2}px serif`;ctx.fillStyle=p.color;
+    ctx.fillStyle=p.bg;ctx.fill();ctx.strokeStyle=p.color+'a0';ctx.lineWidth=1.5;ctx.stroke();
+    // Symbol
+    ctx.save();ctx.font=`${pr2*2.1}px serif`;ctx.fillStyle=p.color;
     ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText(p.sym,cx+Math.cos(a)*pr,cy+Math.sin(a)*pr);
-    ctx.font=`${R*0.028}px 'Cinzel',serif`;ctx.fillStyle=p.color+'bb';
-    ctx.fillText(p.name.slice(0,3),cx+Math.cos(a)*(pr+pr2+R*.055),cy+Math.sin(a)*(pr+pr2+R*.055));
+    // Name label — clearly readable
+    ctx.font=`bold ${R*0.030}px 'Cinzel',serif`;ctx.fillStyle=p.color+'dd';
+    ctx.fillText(p.name.slice(0,3),cx+Math.cos(a)*(pr+pr2+R*.058),cy+Math.sin(a)*(pr+pr2+R*.058));
     ctx.restore();
   }
 
