@@ -265,7 +265,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
     <label>Navigation</label>
     <div class="btn-row">
       <button class="btn today-btn" onclick="goToNow()">📅 Today Now</button>
-      <button class="btn live-btn" id="pauseBtn" onclick="toggleLive()">⏸ Pause</button>
+      <button class="btn live-btn" id="pauseBtn" onclick="toggleLive()" title="Freeze live updates so you can study the current positions without the clock ticking">⏸ Freeze Live</button>
       <button class="btn" onclick="stepDate(-1)">◀ Day</button>
       <button class="btn" onclick="stepDate(1)">Day ▶</button>
       <button class="btn" onclick="stepDate(-365)">◀ Year</button>
@@ -400,6 +400,46 @@ const ORB={
   saturn:  {L0:50.07744, rate:360/10759.22},
   rahu:    {L0:125.04455,rate:-360/6793.5},
 };
+
+// Improved solar longitude with equation of center
+function solarLongitude(d){
+  const M=((357.5291+0.98560028*d)%360+360)%360; // mean anomaly
+  const Mrad=M*Math.PI/180;
+  const C=1.9146*Math.sin(Mrad)+0.02*Math.sin(2*Mrad)+0.0003*Math.sin(3*Mrad);
+  const L=(280.46646+0.98564736*d+C)%360;
+  return(L+360)%360;
+}
+
+// Improved lunar longitude with main perturbation terms
+function lunarLongitude(d){
+  // Mean elements
+  const L0=((218.3165+13.17639648*d)%360+360)%360; // mean longitude
+  const M0=((134.9634+13.06499295*d)%360+360)%360; // mean anomaly
+  const M =((357.5291+0.98560028*d)%360+360)%360;  // sun mean anomaly
+  const D =((297.8502+12.19074912*d)%360+360)%360; // mean elongation
+  const F =((93.2721+13.22935024*d)%360+360)%360;  // argument of latitude
+
+  const toR=Math.PI/180;
+  // Main perturbation terms (degrees)
+  let corr=0;
+  corr += 6.289*Math.sin(M0*toR);
+  corr += 1.274*Math.sin((2*D-M0)*toR);
+  corr += 0.658*Math.sin(2*D*toR);
+  corr += 0.214*Math.sin(2*M0*toR);
+  corr -= 0.186*Math.sin(M*toR);
+  corr -= 0.114*Math.sin(2*F*toR);
+  corr += 0.059*Math.sin((2*D-2*M0)*toR);
+  corr += 0.057*Math.sin((2*D-M-M0)*toR);
+  corr += 0.053*Math.sin((2*D+M0)*toR);
+  corr += 0.046*Math.sin((2*D-M)*toR);
+  corr -= 0.041*Math.sin(M0-M)*toR;  // small, skip exact
+  corr += 0.035*Math.sin(D*toR);
+  corr -= 0.031*Math.sin((M0+M)*toR);
+  corr -= 0.015*Math.sin((2*F-2*D)*toR);
+  corr += 0.011*Math.sin((M0-4*D)*toR);
+
+  return((L0+corr)%360+360)%360;
+}
 const AYANAMSAS={
   lahiri:{base:23.8564,rate:50.2388/3600},
   raman:{base:22.460,rate:50.2388/3600},
@@ -533,8 +573,15 @@ function computePos(date,ayanKey){
   const res={};
   for(const p of PLANETS){
     if(p.id==='ketu')continue;
-    const orb=ORB[p.id];
-    const trop=((orb.L0+orb.rate*d)%360+360)%360;
+    let trop;
+    if(p.id==='sun'){
+      trop=solarLongitude(d);
+    } else if(p.id==='moon'){
+      trop=lunarLongitude(d);
+    } else {
+      const orb=ORB[p.id];
+      trop=((orb.L0+orb.rate*d)%360+360)%360;
+    }
     const sid=ayanKey==='tropical'?trop:((trop-ayan)%360+360)%360;
     res[p.id]={lon:sid,trop};
   }
@@ -650,7 +697,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const d=new Date(dtNative.value);
     dtText.value=formatDTText(d);
     isPaused=true;liveMode=false;stopLive();
-    document.getElementById('pauseBtn').textContent='▶ Resume';
+    document.getElementById('pauseBtn').textContent='▶ Resume Live';
     currentDate=d;
     dayOffset=0;yearOffset=0;
     document.getElementById('daySlider').value=0;
@@ -660,16 +707,21 @@ document.addEventListener('DOMContentLoaded',()=>{
     render();
   });
 
-  // Text box: parse on Enter or blur
+  // Text box: parse on Enter or blur. Support: YYYY-MM-DD HH:MM, YYYY-MM-DD, or just a year like 2150
   function parseTextInput(){
     const v=dtText.value.trim();
     if(!v)return;
-    // Try ISO-like parse: YYYY-MM-DD HH:MM or YYYY-MM-DD
-    const iso=v.replace(' ','T');
-    const d=new Date(iso.includes('T')?iso+'':iso+'T00:00:00');
-    if(!isNaN(d)){
+    let d;
+    // Year only e.g. "2150"
+    if(/^\d{4}$/.test(v)){
+      d=new Date(`${v}-01-01T00:00:00Z`);
+    } else {
+      const iso=v.replace(' ','T');
+      d=new Date(iso.includes('T')?iso+'Z':iso+'T00:00:00Z');
+    }
+    if(!isNaN(d.getTime())){
       isPaused=true;liveMode=false;stopLive();
-      document.getElementById('pauseBtn').textContent='▶ Resume';
+      document.getElementById('pauseBtn').textContent='▶ Resume Live';
       currentDate=d;
       dayOffset=0;yearOffset=0;
       document.getElementById('daySlider').value=0;
@@ -679,7 +731,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       render();
     }
   }
-  dtText.addEventListener('keydown',e=>{if(e.key==='Enter')parseTextInput();});
+  dtText.addEventListener('keydown',e=>{if(e.key==='Enter'){parseTextInput();dtText.blur();}});
   dtText.addEventListener('blur',parseTextInput);
 });
 
@@ -688,8 +740,12 @@ function formatDTText(d){
   return`${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 function syncDTInputs(){
-  document.getElementById('dtText').value=formatDTText(currentDate);
-  // sync native too
+  const dtText=document.getElementById('dtText');
+  // Only update text box if user is NOT currently editing it (cursor stays put)
+  if(document.activeElement!==dtText){
+    dtText.value=formatDTText(currentDate);
+  }
+  // Always sync the hidden native picker
   const local=new Date(currentDate.getTime()-currentDate.getTimezoneOffset()*60000);
   document.getElementById('dtNative').value=local.toISOString().slice(0,16);
 }
@@ -1335,37 +1391,59 @@ function drawOrrery(){
   ctx.strokeStyle='rgba(100,180,255,.35)';ctx.lineWidth=1.5;ctx.stroke();
   ctx.save();ctx.font=`${er*1.9}px serif`;ctx.fillStyle='#a0d0ff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⊕',cx,cy);ctx.restore();
 
-  // Moon — smaller, accurate phase rendering
+  // Moon — accurate phase rendering using correct terminator geometry
   const mx=cx+Math.cos(moonOrbA)*moonR,my=cy+Math.sin(moonOrbA)*moonR;
   const mr=W*.014;
-  // Draw dark base
   ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.fillStyle='#141820';ctx.fill();
 
-  // Phase: use correct geometry
-  // phaseDiff=0 → new moon (dark), 180 → full moon (lit), 90 → first quarter (right lit), 270 → last quarter (left lit)
+  // Correct phase geometry:
+  // The moon's lit side always faces the Sun direction.
+  // We draw the moon as seen from Earth (geocentric view).
+  // Phase angle = elongation = phaseDiff (0=new, 90=FQ, 180=full, 270=LQ)
+  // Terminator x-width = mr * cos(phaseAngle) — negative means lit on left
+  // The lit limb is always the side facing the sun direction projected onto moon disc.
   ctx.save();
   ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.clip();
-  if(phaseDiff>=178&&phaseDiff<=182){
-    // Full moon: entire circle lit
-    ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.fillStyle='#d8e8f0';ctx.fill();
-  } else if(phaseDiff<=2||phaseDiff>=358){
-    // New moon: all dark (already done)
-  } else if(phaseDiff<180){
-    // Waxing: right half lit + ellipse terminator
-    // Lit = right semicircle
-    ctx.beginPath();ctx.arc(mx,my,mr,-Math.PI/2,Math.PI/2,false);ctx.closePath();ctx.fillStyle='#c8d8e8';ctx.fill();
-    // Dark terminator ellipse on right side (shrinks as we approach full)
-    const termWidth=mr*Math.cos(phaseDiff*Math.PI/180);
-    if(termWidth>0){
-      ctx.beginPath();ctx.ellipse(mx,my,termWidth,mr,0,-Math.PI/2,Math.PI/2,false);ctx.closePath();ctx.fillStyle='#141820';ctx.fill();
-    }
+
+  const phaseAngle=phaseDiff; // 0-360
+  if(phaseAngle<1||phaseAngle>359){
+    // New moon — fully dark (base already drawn)
+  } else if(phaseAngle>179&&phaseAngle<181){
+    // Full moon — fully lit
+    ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.fillStyle='#ddeef8';ctx.fill();
   } else {
-    // Waning: left half lit + ellipse terminator
-    ctx.beginPath();ctx.arc(mx,my,mr,Math.PI/2,-Math.PI/2,false);ctx.closePath();ctx.fillStyle='#c8d8e8';ctx.fill();
-    // Dark terminator on left side
-    const termWidth=mr*Math.abs(Math.cos(phaseDiff*Math.PI/180));
-    if(termWidth>0){
-      ctx.beginPath();ctx.ellipse(mx,my,termWidth,mr,0,Math.PI/2,-Math.PI/2,false);ctx.closePath();ctx.fillStyle='#141820';ctx.fill();
+    // General case: terminator is an ellipse
+    // terminator half-width = mr * |cos(elongation)|
+    // For 0<elong<180 (waxing): right side faces sun, lit on right
+    // For 180<elong<360 (waning): left side faces sun, lit on left
+    const termX = mr * Math.cos(phaseAngle * Math.PI / 180); // positive=waxing dark left, negative=waning dark right
+
+    if(phaseAngle < 180){
+      // Waxing: lit half is the right semicircle (toward sun which is "ahead")
+      // Fill entire right half lit
+      ctx.beginPath();
+      ctx.arc(mx,my,mr,-Math.PI/2,Math.PI/2,false);
+      ctx.closePath();ctx.fillStyle='#c8d8ea';ctx.fill();
+      // Overlay terminator ellipse: dark side on left, narrows as we approach full
+      // termX is positive for waxing, shrinks to 0 at full
+      // At new moon termX=mr (half circle dark), at full termX→0
+      if(termX > 0.5){
+        ctx.beginPath();
+        ctx.ellipse(mx, my, termX, mr, 0, -Math.PI/2, Math.PI/2, false);
+        ctx.closePath();ctx.fillStyle='#141820';ctx.fill();
+      }
+    } else {
+      // Waning: lit half is the left semicircle
+      ctx.beginPath();
+      ctx.arc(mx,my,mr,Math.PI/2,-Math.PI/2,false);
+      ctx.closePath();ctx.fillStyle='#c8d8ea';ctx.fill();
+      // termX is negative for waning: abs gives the ellipse half-width
+      const tw = Math.abs(termX);
+      if(tw > 0.5){
+        ctx.beginPath();
+        ctx.ellipse(mx, my, tw, mr, 0, Math.PI/2, -Math.PI/2, false);
+        ctx.closePath();ctx.fillStyle='#141820';ctx.fill();
+      }
     }
   }
   ctx.restore();
@@ -1411,20 +1489,20 @@ function drawOrrery(){
 // ═══════════════════════════════════
 function goToNow(){
   liveMode=true;isPaused=false;dayOffset=0;yearOffset=0;
-  document.getElementById('pauseBtn').textContent='⏸ Pause';
+  document.getElementById('pauseBtn').textContent='⏸ Freeze Live';
   document.getElementById('daySlider').value=0;document.getElementById('daySliderVal').textContent='±0d';
   document.getElementById('yearSlider').value=0;document.getElementById('yearSliderVal').textContent='±0y';
   currentDate=new Date();syncDTInputs();render();startLive();
 }
 function stepDate(days){
   isPaused=true;liveMode=false;stopLive();
-  document.getElementById('pauseBtn').textContent='▶ Resume';
+  document.getElementById('pauseBtn').textContent='▶ Resume Live';
   currentDate=new Date(currentDate.getTime()+days*86400000);
   syncDTInputs();render();
 }
 function toggleLive(){
-  if(isPaused){isPaused=false;liveMode=true;startLive();document.getElementById('pauseBtn').textContent='⏸ Pause';}
-  else{isPaused=true;liveMode=false;stopLive();document.getElementById('pauseBtn').textContent='▶ Resume';}
+  if(isPaused){isPaused=false;liveMode=true;startLive();document.getElementById('pauseBtn').textContent='⏸ Freeze Live';}
+  else{isPaused=true;liveMode=false;stopLive();document.getElementById('pauseBtn').textContent='▶ Resume Live';}
 }
 function startLive(){
   stopLive();
