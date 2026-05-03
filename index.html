@@ -38,13 +38,40 @@ header .subtitle{font-style:italic;font-size:.92rem;color:var(--text-dim);margin
 /* Date-time custom control */
 .dt-wrap{position:relative;display:flex;align-items:center;gap:0;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;overflow:hidden;transition:border-color .2s;}
 .dt-wrap:focus-within{border-color:var(--gold);}
-.dt-text{background:transparent;border:none;color:var(--text-bright);padding:8px 11px;font-family:'JetBrains Mono',monospace;font-size:.82rem;outline:none;min-width:180px;cursor:text;}
+.dt-text{background:transparent;border:none;color:var(--text-bright);padding:8px 11px;font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none;min-width:260px;cursor:text;}
 .dt-cal-btn{background:rgba(201,168,76,.1);border:none;border-left:1px solid var(--border2);color:var(--gold);padding:8px 11px;cursor:pointer;font-size:1rem;transition:background .2s;position:relative;}
 .dt-cal-btn:hover{background:rgba(201,168,76,.25);}
 .dt-cal-btn title-hint{display:none;}
 .dt-cal-btn::after{content:'📅';font-size:.9rem;}
 /* Invisible native datetime sits over the calendar icon only */
 .dt-native{position:absolute;right:0;top:0;width:40px;height:100%;opacity:0;cursor:pointer;z-index:2;}
+
+/* ── TIME PICKER POPUP ── */
+.dt-time-btn{background:rgba(63,184,196,.12);border:none;border-left:1px solid var(--border2);color:var(--teal);padding:8px 11px;cursor:pointer;font-size:.9rem;transition:background .2s;white-space:nowrap;}
+.dt-time-btn:hover{background:rgba(63,184,196,.28);}
+.dt-time-popup{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;
+  background:var(--bg2);border:1px solid var(--border2);border-radius:10px;
+  padding:16px;z-index:300;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:300px;
+}
+.dt-time-popup.open{display:block;}
+.dt-time-popup h4{font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px;}
+.dt-time-row-inner{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.dt-time-label{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--text-dim);min-width:52px;}
+.dt-spin{background:var(--bg3);border:1px solid var(--border2);color:var(--text-bright);font-family:'JetBrains Mono',monospace;font-size:.9rem;width:48px;text-align:center;padding:6px 4px;border-radius:5px;outline:none;-moz-appearance:textfield;}
+.dt-spin::-webkit-inner-spin-button,.dt-spin::-webkit-outer-spin-button{-webkit-appearance:none;}
+.dt-spin:focus{border-color:var(--gold);}
+.dt-colon{color:var(--gold);font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:bold;}
+.dt-ampm{display:flex;border:1px solid var(--border2);border-radius:5px;overflow:hidden;margin-left:4px;}
+.dt-ampm button{background:transparent;border:none;color:var(--text-dim);font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.06em;padding:6px 11px;cursor:pointer;transition:all .18s;}
+.dt-ampm button.on{background:rgba(201,168,76,.25);color:var(--gold2);}
+.dt-ampm button:hover:not(.on){background:rgba(201,168,76,.08);color:var(--text-bright);}
+.dt-ampm-div{width:1px;background:var(--border2);}
+.dt-tz-select{background:var(--bg3);border:1px solid var(--border2);color:var(--text-bright);font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:6px 8px;border-radius:5px;outline:none;width:100%;margin-bottom:10px;}
+.dt-tz-select:focus{border-color:var(--gold);}
+.dt-tz-select option{background:var(--bg3);}
+.dt-popup-apply{width:100%;background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.08));border:1px solid var(--gold-dim);color:var(--gold2);padding:7px;border-radius:5px;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.1em;cursor:pointer;transition:all .2s;}
+.dt-popup-apply:hover{background:linear-gradient(135deg,rgba(201,168,76,.35),rgba(201,168,76,.15));border-color:var(--gold2);}
 
 .btn-row{display:flex;gap:7px;flex-wrap:wrap;}
 .btn{background:linear-gradient(135deg,rgba(201,168,76,.15),rgba(201,168,76,.05));border:1px solid var(--gold-dim);color:var(--gold2);padding:8px 16px;border-radius:6px;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.08em;cursor:pointer;transition:all .2s;white-space:nowrap;}
@@ -245,12 +272,33 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 <!-- CONTROLS -->
 <div class="controls">
   <div class="ctrl-group">
-    <label>Date &amp; Time — ✏️ type freely · 📅 calendar</label>
-    <div class="dt-wrap" id="dtWrap">
+    <label>Date &amp; Time — ✏️ type freely · 📅 calendar · 🕐 time &amp; timezone</label>
+    <div class="dt-wrap" id="dtWrap" style="overflow:visible;">
       <input type="text" id="dtText" class="dt-text" placeholder="YYYY-MM-DD HH:MM  (or just year: 2150)" title="Type any date: 2150-05-10 14:30 or just 2150">
       <button class="dt-cal-btn" title="Open date calendar — click a date to jump there" tabindex="-1" onclick="triggerCal()"></button>
-      <!-- Date-only picker: cleaner, no time confusion, selecting a date closes immediately -->
       <input type="date" id="dtNative" class="dt-native" tabindex="-1">
+      <!-- Time & timezone button -->
+      <button class="dt-time-btn" onclick="toggleTimePopup(event)" title="Set time and timezone">🕐</button>
+      <!-- Time popup -->
+      <div class="dt-time-popup" id="dtTimePopup">
+        <h4>Set Time &amp; Timezone</h4>
+        <div class="dt-time-row-inner">
+          <span class="dt-time-label">Hour : Min</span>
+          <input type="number" id="tpHour" class="dt-spin" min="1" max="12" value="12">
+          <span class="dt-colon">:</span>
+          <input type="number" id="tpMin" class="dt-spin" min="0" max="59" value="0">
+          <div class="dt-ampm">
+            <button id="tpAM" class="on" onclick="setTP_AMPM('AM')">AM</button>
+            <span class="dt-ampm-div"></span>
+            <button id="tpPM" onclick="setTP_AMPM('PM')">PM</button>
+          </div>
+        </div>
+        <div class="dt-time-row-inner" style="flex-direction:column;align-items:flex-start;gap:5px;">
+          <span class="dt-time-label" style="min-width:unset">Timezone</span>
+          <select id="tpTZ" class="dt-tz-select"></select>
+        </div>
+        <button class="dt-popup-apply" onclick="applyTimePopup()">✓ Apply Time &amp; Timezone</button>
+      </div>
     </div>
   </div>
   <div class="ctrl-group">
@@ -689,6 +737,7 @@ let dayOffset=0,yearOffset=0;
 function triggerCal(){document.getElementById('dtNative').showPicker();}
 
 document.addEventListener('DOMContentLoaded',()=>{
+  initTimePopup();
   const dtText=document.getElementById('dtText');
   const dtNative=document.getElementById('dtNative');
 
@@ -716,19 +765,44 @@ document.addEventListener('DOMContentLoaded',()=>{
     render();
   });
 
-  // Text box: parse on Enter or blur. Support: YYYY-MM-DD HH:MM, YYYY-MM-DD, or just a year like 2150
+  // Text box: parse on Enter or blur.
+  // Accepts: "2150", "2150-05-10", "2150-05-10 14:30", "2150-05-10 2:30 PM (IST)" etc.
   function parseTextInput(){
-    const v=dtText.value.trim();
+    let v=dtText.value.trim();
     if(!v)return;
+    // Strip any trailing timezone annotation like " (Kolkata)" or " (UTC)"
+    v=v.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    // Strip extra spaces (the display uses double-space between date and time)
+    v=v.replace(/\s+/g,' ').trim();
+
     let d;
-    // Year only e.g. "2150"
     if(/^\d{4}$/.test(v)){
-      d=new Date(`${v}-01-01T00:00:00Z`);
+      // Year only → Jan 1 of that year, keep current time
+      d=new Date(currentDate.getTime());
+      d.setUTCFullYear(parseInt(v));
+    } else if(/^\d{4}-\d{2}-\d{2}$/.test(v)){
+      // Date only → keep current time
+      d=new Date(currentDate.getTime());
+      const parts=v.split('-');
+      d.setUTCFullYear(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
     } else {
-      const iso=v.replace(' ','T');
-      d=new Date(iso.includes('T')?iso+'Z':iso+'T00:00:00Z');
+      // Try to parse date + time (24h or 12h AM/PM)
+      // e.g. "2150-05-10 14:30" or "2150-05-10 2:30 PM"
+      const ampmMatch=v.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if(ampmMatch){
+        const dateParts=ampmMatch[1].split('-');
+        let h=parseInt(ampmMatch[2]),m=parseInt(ampmMatch[3]);
+        const isPM=ampmMatch[4].toUpperCase()==='PM';
+        if(isPM&&h!==12)h+=12;
+        if(!isPM&&h===12)h=0;
+        d=new Date(Date.UTC(parseInt(dateParts[0]),parseInt(dateParts[1])-1,parseInt(dateParts[2]),h,m,0));
+      } else {
+        // 24h format: "2150-05-10 14:30"
+        const iso=v.replace(' ','T');
+        d=new Date(iso.includes('T')?iso+'Z':iso+'T00:00:00Z');
+      }
     }
-    if(!isNaN(d.getTime())){
+    if(d&&!isNaN(d.getTime())){
       isPaused=true;liveMode=false;stopLive();
       document.getElementById('pauseBtn').textContent='▶ Resume Live';
       currentDate=d;
@@ -739,6 +813,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       document.getElementById('yearSliderVal').textContent='±0y';
       render();
     }
+    // If parse failed, syncDTInputs will restore current value on next tick — no revert on blur
   }
   dtText.addEventListener('keydown',e=>{if(e.key==='Enter'){parseTextInput();dtText.blur();}});
   dtText.addEventListener('blur',parseTextInput);
@@ -746,16 +821,221 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 function formatDTText(d){
   const p=n=>String(n).padStart(2,'0');
-  return`${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+  try{
+    const tz=currentTZ||'UTC';
+    const fmt=new Intl.DateTimeFormat('en-US',{
+      year:'numeric',month:'2-digit',day:'2-digit',
+      hour:'numeric',minute:'2-digit',hour12:true,timeZone:tz
+    });
+    const parts=fmt.formatToParts(d);
+    const get=type=>parts.find(x=>x.type===type)?.value||'';
+    const tzShort=tz==='UTC'?'UTC':tz.split('/').pop().replace('_',' ');
+    return`${get('year')}-${get('month')}-${get('day')}  ${get('hour')}:${get('minute')} ${get('dayPeriod')} (${tzShort})`;
+  }catch(e){
+    const h24=d.getUTCHours(),h12=h24%12||12,ampm=h24<12?'AM':'PM';
+    return`${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}  ${h12}:${p(d.getUTCMinutes())} ${ampm} (UTC)`;
+  }
 }
 function syncDTInputs(){
   const dtText=document.getElementById('dtText');
-  // Only update text box if user is NOT currently editing it (cursor stays put)
-  if(document.activeElement!==dtText){
-    dtText.value=formatDTText(currentDate);
-  }
-  // Native is date-only and reset after use — don't sync it continuously
+  // Don't overwrite while user is actively editing
+  if(document.activeElement===dtText)return;
+  dtText.value=formatDTText(currentDate);
+  // Native date picker is reset after each use — no continuous sync needed
 }
+
+// ═══════════════════════════════════
+//  TIME POPUP
+// ═══════════════════════════════════
+// All major IANA timezones with UTC offset labels
+const TZ_LIST=[
+  {label:'UTC +00:00 — UTC / Greenwich',tz:'UTC'},
+  {label:'UTC −12:00 — Baker Island',tz:'Etc/GMT+12'},
+  {label:'UTC −11:00 — Samoa (US)',tz:'Pacific/Pago_Pago'},
+  {label:'UTC −10:00 — Hawaii',tz:'Pacific/Honolulu'},
+  {label:'UTC −09:30 — Marquesas Islands',tz:'Pacific/Marquesas'},
+  {label:'UTC −09:00 — Alaska',tz:'America/Anchorage'},
+  {label:'UTC −08:00 — Pacific Time (US)',tz:'America/Los_Angeles'},
+  {label:'UTC −08:00 — Vancouver',tz:'America/Vancouver'},
+  {label:'UTC −07:00 — Mountain Time (US)',tz:'America/Denver'},
+  {label:'UTC −07:00 — Arizona (no DST)',tz:'America/Phoenix'},
+  {label:'UTC −06:00 — Central Time (US)',tz:'America/Chicago'},
+  {label:'UTC −06:00 — Mexico City',tz:'America/Mexico_City'},
+  {label:'UTC −05:00 — Eastern Time (US)',tz:'America/New_York'},
+  {label:'UTC −05:00 — Bogotá / Lima / Quito',tz:'America/Bogota'},
+  {label:'UTC −04:00 — Atlantic Time',tz:'America/Halifax'},
+  {label:'UTC −04:00 — Caracas',tz:'America/Caracas'},
+  {label:'UTC −03:30 — Newfoundland',tz:'America/St_Johns'},
+  {label:'UTC −03:00 — Buenos Aires',tz:'America/Argentina/Buenos_Aires'},
+  {label:'UTC −03:00 — Brasília',tz:'America/Sao_Paulo'},
+  {label:'UTC −02:00 — South Georgia',tz:'Atlantic/South_Georgia'},
+  {label:'UTC −01:00 — Azores',tz:'Atlantic/Azores'},
+  {label:'UTC +00:00 — London / Dublin (GMT)',tz:'Europe/London'},
+  {label:'UTC +00:00 — Lisbon',tz:'Europe/Lisbon'},
+  {label:'UTC +00:00 — Accra / Abidjan (WAT)',tz:'Africa/Accra'},
+  {label:'UTC +01:00 — Paris / Berlin / Rome',tz:'Europe/Paris'},
+  {label:'UTC +01:00 — Lagos / Kinshasa',tz:'Africa/Lagos'},
+  {label:'UTC +01:00 — Madrid / Amsterdam',tz:'Europe/Madrid'},
+  {label:'UTC +02:00 — Cairo',tz:'Africa/Cairo'},
+  {label:'UTC +02:00 — Athens / Helsinki',tz:'Europe/Athens'},
+  {label:'UTC +02:00 — Johannesburg',tz:'Africa/Johannesburg'},
+  {label:'UTC +02:00 — Jerusalem',tz:'Asia/Jerusalem'},
+  {label:'UTC +03:00 — Moscow / St Petersburg',tz:'Europe/Moscow'},
+  {label:'UTC +03:00 — Riyadh / Kuwait',tz:'Asia/Riyadh'},
+  {label:'UTC +03:00 — Nairobi',tz:'Africa/Nairobi'},
+  {label:'UTC +03:00 — Baghdad',tz:'Asia/Baghdad'},
+  {label:'UTC +03:00 — Istanbul',tz:'Europe/Istanbul'},
+  {label:'UTC +03:30 — Tehran',tz:'Asia/Tehran'},
+  {label:'UTC +04:00 — Dubai / Abu Dhabi',tz:'Asia/Dubai'},
+  {label:'UTC +04:00 — Baku',tz:'Asia/Baku'},
+  {label:'UTC +04:30 — Kabul',tz:'Asia/Kabul'},
+  {label:'UTC +05:00 — Karachi / Islamabad',tz:'Asia/Karachi'},
+  {label:'UTC +05:00 — Tashkent',tz:'Asia/Tashkent'},
+  {label:'UTC +05:30 — India (IST) — Mumbai / Delhi',tz:'Asia/Kolkata'},
+  {label:'UTC +05:30 — Sri Lanka (IST)',tz:'Asia/Colombo'},
+  {label:'UTC +05:45 — Nepal (NPT)',tz:'Asia/Kathmandu'},
+  {label:'UTC +06:00 — Dhaka / Almaty',tz:'Asia/Dhaka'},
+  {label:'UTC +06:30 — Yangon (Myanmar)',tz:'Asia/Yangon'},
+  {label:'UTC +07:00 — Bangkok / Ho Chi Minh',tz:'Asia/Bangkok'},
+  {label:'UTC +07:00 — Jakarta',tz:'Asia/Jakarta'},
+  {label:'UTC +08:00 — Beijing / Shanghai',tz:'Asia/Shanghai'},
+  {label:'UTC +08:00 — Singapore / Kuala Lumpur',tz:'Asia/Singapore'},
+  {label:'UTC +08:00 — Taipei',tz:'Asia/Taipei'},
+  {label:'UTC +08:00 — Perth',tz:'Australia/Perth'},
+  {label:'UTC +08:45 — Eucla (Australia)',tz:'Australia/Eucla'},
+  {label:'UTC +09:00 — Tokyo / Osaka',tz:'Asia/Tokyo'},
+  {label:'UTC +09:00 — Seoul',tz:'Asia/Seoul'},
+  {label:'UTC +09:30 — Adelaide',tz:'Australia/Adelaide'},
+  {label:'UTC +09:30 — Darwin',tz:'Australia/Darwin'},
+  {label:'UTC +10:00 — Sydney / Melbourne',tz:'Australia/Sydney'},
+  {label:'UTC +10:00 — Vladivostok',tz:'Asia/Vladivostok'},
+  {label:'UTC +10:30 — Lord Howe Island',tz:'Australia/Lord_Howe'},
+  {label:'UTC +11:00 — Solomon Islands',tz:'Pacific/Guadalcanal'},
+  {label:'UTC +12:00 — Auckland / Wellington',tz:'Pacific/Auckland'},
+  {label:'UTC +12:00 — Fiji',tz:'Pacific/Fiji'},
+  {label:'UTC +12:45 — Chatham Islands',tz:'Pacific/Chatham'},
+  {label:'UTC +13:00 — Samoa (independent)',tz:'Pacific/Apia'},
+  {label:'UTC +14:00 — Line Islands (Kiribati)',tz:'Pacific/Kiritimati'},
+];
+
+let currentTZ='UTC'; // working timezone for time popup
+
+function initTimePopup(){
+  const sel=document.getElementById('tpTZ');
+  TZ_LIST.forEach(t=>{
+    const o=document.createElement('option');
+    o.value=t.tz;o.textContent=t.label;
+    if(t.tz==='UTC')o.selected=true;
+    sel.appendChild(o);
+  });
+  // Try to detect user's timezone
+  try{
+    const local=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const match=TZ_LIST.find(t=>t.tz===local);
+    if(match){sel.value=local;currentTZ=local;}
+  }catch(e){}
+  // Sync spinners to currentDate on open
+}
+
+function toggleTimePopup(e){
+  e.stopPropagation();
+  const popup=document.getElementById('dtTimePopup');
+  const isOpen=popup.classList.contains('open');
+  if(!isOpen){
+    // Sync spinners to current displayed time in the chosen timezone
+    syncTimeSpinnersToDate(currentDate,currentTZ);
+  }
+  popup.classList.toggle('open',!isOpen);
+}
+
+function syncTimeSpinnersToDate(date,tz){
+  // Get local time in the selected timezone
+  try{
+    const fmt=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'numeric',hour12:true,timeZone:tz});
+    const parts=fmt.formatToParts(date);
+    const h=parts.find(p=>p.type==='hour');
+    const m=parts.find(p=>p.type==='minute');
+    const ap=parts.find(p=>p.type==='dayPeriod');
+    if(h)document.getElementById('tpHour').value=parseInt(h.value);
+    if(m)document.getElementById('tpMin').value=m.value;
+    const isPM=ap&&ap.value.toUpperCase().includes('P');
+    setTP_AMPM(isPM?'PM':'AM');
+  }catch(e){
+    // Fallback to UTC
+    const h24=date.getUTCHours(),h12=h24%12||12;
+    document.getElementById('tpHour').value=h12;
+    document.getElementById('tpMin').value=String(date.getUTCMinutes()).padStart(2,'0');
+    setTP_AMPM(h24>=12?'PM':'AM');
+  }
+}
+
+function setTP_AMPM(val){
+  document.getElementById('tpAM').classList.toggle('on',val==='AM');
+  document.getElementById('tpPM').classList.toggle('on',val==='PM');
+}
+
+function applyTimePopup(){
+  const h12=Math.max(1,Math.min(12,parseInt(document.getElementById('tpHour').value)||12));
+  const m=Math.max(0,Math.min(59,parseInt(document.getElementById('tpMin').value)||0));
+  const isPM=document.getElementById('tpPM').classList.contains('on');
+  const tz=document.getElementById('tpTZ').value;
+  currentTZ=tz;
+
+  // Convert the local time in chosen timezone to UTC
+  // Strategy: find the UTC time that corresponds to h12:m AM/PM in the chosen tz on the current date
+  let h24=h12;
+  if(isPM&&h12!==12)h24=h12+12;
+  if(!isPM&&h12===12)h24=0;
+
+  // Get the current date in the chosen timezone to know Y-M-D
+  const tzDateStr=currentDate.toLocaleDateString('en-CA',{timeZone:tz}); // YYYY-MM-DD
+  const parts=tzDateStr.split('-');
+  const year=parseInt(parts[0]),mon=parseInt(parts[1])-1,day=parseInt(parts[2]);
+
+  // Build a Date that represents h24:m on that local date in that timezone
+  // Use a known-UTC-offset approach via Intl
+  const guessUTC=new Date(Date.UTC(year,mon,day,h24,m,0));
+  // Adjust for timezone offset: find what the timezone offset is at that moment
+  const offsetMs=getTZOffsetMs(guessUTC,tz);
+  const finalUTC=new Date(guessUTC.getTime()-offsetMs);
+
+  // Apply
+  isPaused=true;liveMode=false;stopLive();
+  document.getElementById('pauseBtn').textContent='▶ Resume Live';
+  currentDate=finalUTC;
+  dayOffset=0;yearOffset=0;
+  if(document.getElementById('daySlider'))document.getElementById('daySlider').value=0;
+  if(document.getElementById('yearSlider'))document.getElementById('yearSlider').value=0;
+  if(document.getElementById('daySliderVal'))document.getElementById('daySliderVal').textContent='±0d';
+  if(document.getElementById('yearSliderVal'))document.getElementById('yearSliderVal').textContent='±0y';
+  syncDTInputs();
+  render();
+  // Close popup
+  document.getElementById('dtTimePopup').classList.remove('open');
+}
+
+function getTZOffsetMs(utcDate,tz){
+  // Returns the UTC offset in ms for tz at the given UTC date
+  try{
+    const fmt=new Intl.DateTimeFormat('en-US',{
+      timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',
+      hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
+    });
+    const parts=fmt.formatToParts(utcDate);
+    const get=type=>parseInt(parts.find(p=>p.type===type)?.value||'0');
+    let h=get('hour');if(h===24)h=0;
+    const localMs=Date.UTC(get('year'),get('month')-1,get('day'),h,get('minute'),get('second'));
+    return localMs-utcDate.getTime();
+  }catch(e){return 0;}
+}
+
+// Close popup when clicking outside
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#dtWrap')){
+    const p=document.getElementById('dtTimePopup');
+    if(p)p.classList.remove('open');
+  }
+});
 
 // ═══════════════════════════════════
 //  SEARCH INDEX
