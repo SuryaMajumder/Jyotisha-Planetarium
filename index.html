@@ -1322,7 +1322,13 @@ function renderPanchang(){
       <div class="panc-value">${getMuhurta(tithi,yoga,karana,vara)}</div>
       <div class="panc-sub">Combined quality of day<br>Tithi+Vara+Nak+Yoga</div>
     </div>
-  </div>`;
+  </div>
+
+  <div class="panc-section-title">Sankranti — Solar Ingress into Rashi</div>
+  <div class="panc-row">${buildSankrantiCards(sl)}</div>
+
+  <div class="panc-section-title">Adhika Masa — Intercalary Month</div>
+  <div class="panc-row">${buildAdhikaCard(currentDate.getUTCFullYear())}</div>`;
 
   const tb=document.getElementById('panchangTab');if(tb)tb.innerHTML=html;
   const bb=document.getElementById('panchangBottom');if(bb){
@@ -1349,6 +1355,101 @@ function renderPanchang(){
     </div>`;
   }
 }
+function buildSankrantiCards(sl){
+  // Next Sankranti: degrees remaining in current sign → days
+  const degInSign=sl%30;
+  const daysLeft=(30-degInSign)*(365.25/360);
+  const nextIdx=(gsi(sl)+1)%12;
+  const ns=SIGNS[nextIdx];
+  // Use Sanskrit names always
+  const SPECIAL={0:'Mesh Sankranti (Solar New Year)',3:'Kark Sankranti (Dakshinayana begins)',
+    6:'Tula Sankranti',9:'Makar Sankranti 🎉 (Uttarayana begins)'};
+  const specialName=SPECIAL[nextIdx]||`${ns.sa} Sankranti`;
+  const isToday=daysLeft<1;
+  const curSign=SIGNS[gsi(sl)];
+
+  // Find Makar Sankranti date this year by scanning daily for Sun crossing into Makara (idx 9)
+  const yr=currentDate.getUTCFullYear();
+  let makarDate='—';
+  for(let i=0;i<370;i++){
+    const d1=new Date(Date.UTC(yr,0,1,12,0,0)+i*86400000);
+    const d2=new Date(d1.getTime()+86400000);
+    if(gsi(computePos(d1,currentAyan).sun.lon)!==9&&gsi(computePos(d2,currentAyan).sun.lon)===9){
+      const p=n=>String(n).padStart(2,'0');
+      makarDate=`${d1.getUTCFullYear()}-${p(d1.getUTCMonth()+1)}-${p(d1.getUTCDate())} UTC`;
+      break;
+    }
+  }
+
+  return`
+    <div class="panc-card ${isToday?'timing':''}">
+      <div class="panc-title">Next Sankranti</div>
+      <div class="panc-value">${specialName}</div>
+      <div class="panc-sub">Sun → ${ns.sym} ${ns.en} / ${ns.sa}<br>${isToday?'🎉 Today!':fmtHours(daysLeft*24)+' from now (~'+daysLeft.toFixed(1)+' days)'}</div>
+    </div>
+    <div class="panc-card">
+      <div class="panc-title">Makar Sankranti ${yr}</div>
+      <div class="panc-value">☀ Sun → ♑ Makara</div>
+      <div class="panc-sub">${makarDate}<br>Uttarayana begins · Harvest festival</div>
+    </div>
+    <div class="panc-card">
+      <div class="panc-title">Current Rashi (Sun)</div>
+      <div class="panc-value">${curSign.sym} ${curSign.en} / ${curSign.sa}</div>
+      <div class="panc-sub">${degInSign.toFixed(2)}° elapsed of 30°<br>${(30-degInSign).toFixed(2)}° until ${ns.sa} Sankranti</div>
+    </div>`;
+}
+
+function buildAdhikaCard(year){
+  // Detect Adhika Masa: find all Amavasyas (new moons) in the year.
+  // Scan every 6 hours for elongation crossing 0° (new moon) — fine enough to catch sign.
+  const newMoons=[];
+  let prev=null;
+  for(let i=0;i<365*4+4;i++){
+    const d=new Date(Date.UTC(year,0,1,0,0,0)+i*6*3600000);
+    const pos=computePos(d,currentAyan);
+    const elong=((pos.moon.lon-pos.sun.lon)%360+360)%360;
+    if(prev!==null&&prev>300&&elong<60){
+      // New moon just crossed — use midpoint for accuracy
+      const dmid=new Date(d.getTime()-3*3600000);
+      const pmid=computePos(dmid,currentAyan);
+      const si=gsi(pmid.sun.lon);
+      newMoons.push({date:dmid,si,signSa:SIGNS[si].sa,signEn:SIGNS[si].en,masa:MASA[(si+1)%12]});
+    }
+    prev=elong;
+  }
+  // Check consecutive new moons in same solar sign
+  for(let i=0;i<newMoons.length-1;i++){
+    if(newMoons[i].si===newMoons[i+1].si){
+      const p=n=>String(n).padStart(2,'0');
+      const d=newMoons[i+1].date;
+      // The Adhika masa is named after the REGULAR masa it precedes
+      // e.g. if Sun is in Vrishabha during both new moons → Adhika Jyeshtha
+      // masa array: MASA[(si+1)%12]
+      const adhikaName=`Adhika ${newMoons[i].masa}`;
+      return`<div class="panc-card timing">
+        <div class="panc-title">Adhika Masa ${year} ✓</div>
+        <div class="panc-value">🌙 ${adhikaName}</div>
+        <div class="panc-sub">Sun remains in ${newMoons[i].signEn} (${newMoons[i].signSa}) across two new moons.<br>~${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}<br>Auspicious events postponed to following month.</div>
+      </div>
+      <div class="panc-card">
+        <div class="panc-title">About Adhika Masa</div>
+        <div class="panc-value">अधिकमास / Purushottama</div>
+        <div class="panc-sub">Occurs ~every 2.7 years. A lunar month (~29.5d) fits entirely within one Rashi, creating an intercalary month to sync lunar & solar calendars.</div>
+      </div>`;
+    }
+  }
+  return`<div class="panc-card">
+    <div class="panc-title">Adhika Masa ${year}</div>
+    <div class="panc-value">No Leap Month</div>
+    <div class="panc-sub">No Adhika Masa in ${year}.<br>Occurs ~every 2.7 years when a full lunar month fits within one solar sign.</div>
+  </div>
+  <div class="panc-card">
+    <div class="panc-title">About Adhika Masa</div>
+    <div class="panc-value">अधिकमास / Purushottama</div>
+    <div class="panc-sub">Intercalary (leap) lunar month. Keeps the Hindu lunar calendar aligned with seasons. Also called Purushottama Masa — spiritually significant.</div>
+  </div>`;
+}
+
 function getMuhurta(tithi,yoga,karana,vara){
   let score=0;
   if(['Dvitiya','Tritiya','Panchami','Saptami','Dashami','Ekadashi','Dvadashi','Trayodashi'].includes(tithi.name))score++;
@@ -1702,59 +1803,59 @@ function drawOrrery(){
   ctx.strokeStyle='rgba(100,180,255,.35)';ctx.lineWidth=1.5;ctx.stroke();
   ctx.save();ctx.font=`${er*1.9}px serif`;ctx.fillStyle='#a0d0ff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⊕',cx,cy);ctx.restore();
 
-  // Moon — accurate phase rendering using correct terminator geometry
+  // Moon — smooth continuous phase (corrected waning)
+  // Geometry: illuminated fraction = (1 - cos(elong)) / 2
+  //   0°   → 0%   new moon (dark)
+  //   90°  → 50%  first quarter (right half lit)
+  //   180° → 100% full moon (all lit)
+  //   270° → 50%  last quarter (left half lit)
+  //   360° → 0%   new moon again
+  //
+  // Terminator ellipse x-half-width = mr * |cos(elong)|
+  //   Waxing (0–180°): RIGHT half lit, dark ellipse overlaid on RIGHT side (shrinks to 0 at full)
+  //   Waning (180–360°): LEFT half lit, dark ellipse overlaid on LEFT side (grows from 0 at full)
   const mx=cx+Math.cos(moonOrbA)*moonR,my=cy+Math.sin(moonOrbA)*moonR;
   const mr=W*.014;
-  ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.fillStyle='#141820';ctx.fill();
+  const angleRad = phaseDiff * Math.PI / 180;
+  const cosA = Math.cos(angleRad);
+  const tw = Math.abs(mr * cosA);
 
-  // Correct phase geometry:
-  // The moon's lit side always faces the Sun direction.
-  // We draw the moon as seen from Earth (geocentric view).
-  // Phase angle = elongation = phaseDiff (0=new, 90=FQ, 180=full, 270=LQ)
-  // Terminator x-width = mr * cos(phaseAngle) — negative means lit on left
-  // The lit limb is always the side facing the sun direction projected onto moon disc.
+  // 1. Draw Background (Dark Moon)
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2);
+  ctx.fillStyle = '#141820'; ctx.fill();
+
   ctx.save();
-  ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.clip();
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.clip();
 
-  const phaseAngle=phaseDiff; // 0-360
-  if(phaseAngle<1||phaseAngle>359){
-    // New moon — fully dark (base already drawn)
-  } else if(phaseAngle>179&&phaseAngle<181){
-    // Full moon — fully lit
-    ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.fillStyle='#ddeef8';ctx.fill();
-  } else {
-    // General case: terminator is an ellipse
-    // terminator half-width = mr * |cos(elongation)|
-    // For 0<elong<180 (waxing): right side faces sun, lit on right
-    // For 180<elong<360 (waning): left side faces sun, lit on left
-    const termX = mr * Math.cos(phaseAngle * Math.PI / 180); // positive=waxing dark left, negative=waning dark right
-
-    if(phaseAngle < 180){
-      // Waxing: lit half is the right semicircle (toward sun which is "ahead")
-      // Fill entire right half lit
-      ctx.beginPath();
-      ctx.arc(mx,my,mr,-Math.PI/2,Math.PI/2,false);
-      ctx.closePath();ctx.fillStyle='#c8d8ea';ctx.fill();
-      // Overlay terminator ellipse: dark side on left, narrows as we approach full
-      // termX is positive for waxing, shrinks to 0 at full
-      // At new moon termX=mr (half circle dark), at full termX→0
-      if(termX > 0.5){
-        ctx.beginPath();
-        ctx.ellipse(mx, my, termX, mr, 0, -Math.PI/2, Math.PI/2, false);
-        ctx.closePath();ctx.fillStyle='#141820';ctx.fill();
-      }
+  if (phaseDiff < 180) {
+    // WAXING (0 to 180)
+    if (cosA >= 0) {
+      // Crescent: Right semicircle light, minus a dark ellipse on the right
+      ctx.beginPath(); ctx.arc(mx, my, mr, -Math.PI/2, Math.PI/2, false);
+      ctx.fillStyle = '#c8d8ea'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(mx, my, tw, mr, 0, -Math.PI/2, Math.PI/2, false);
+      ctx.fillStyle = '#141820'; ctx.fill();
     } else {
-      // Waning: lit half is the left semicircle
-      ctx.beginPath();
-      ctx.arc(mx,my,mr,Math.PI/2,-Math.PI/2,false);
-      ctx.closePath();ctx.fillStyle='#c8d8ea';ctx.fill();
-      // termX is negative for waning: abs gives the ellipse half-width
-      const tw = Math.abs(termX);
-      if(tw > 0.5){
-        ctx.beginPath();
-        ctx.ellipse(mx, my, tw, mr, 0, Math.PI/2, -Math.PI/2, false);
-        ctx.closePath();ctx.fillStyle='#141820';ctx.fill();
-      }
+      // Gibbous: Right semicircle light, PLUS a light ellipse on the left
+      ctx.beginPath(); ctx.arc(mx, my, mr, -Math.PI/2, Math.PI/2, false);
+      ctx.fillStyle = '#c8d8ea'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(mx, my, tw, mr, 0, Math.PI/2, -Math.PI/2, false);
+      ctx.fillStyle = '#c8d8ea'; ctx.fill();
+    }
+  } else {
+    // WANING (180 to 360)
+    if (cosA <= 0) {
+      // Gibbous: Left semicircle light, PLUS a light ellipse on the right
+      ctx.beginPath(); ctx.arc(mx, my, mr, Math.PI/2, -Math.PI/2, false);
+      ctx.fillStyle = '#c8d8ea'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(mx, my, tw, mr, 0, -Math.PI/2, Math.PI/2, false);
+      ctx.fillStyle = '#c8d8ea'; ctx.fill();
+    } else {
+      // Crescent: Left semicircle light, minus a dark ellipse on the left
+      ctx.beginPath(); ctx.arc(mx, my, mr, Math.PI/2, -Math.PI/2, false);
+      ctx.fillStyle = '#c8d8ea'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(mx, my, tw, mr, 0, Math.PI/2, -Math.PI/2, false);
+      ctx.fillStyle = '#141820'; ctx.fill();
     }
   }
   ctx.restore();
