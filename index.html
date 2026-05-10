@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jyotisha Darpana v3</title>
+<title>Jyotisha Darpana v5</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400&display=swap');
 :root{
@@ -28,7 +28,7 @@ header .subtitle{font-style:italic;font-size:.92rem;color:var(--text-dim);margin
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 
 /* ── CONTROLS ── */
-.controls{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:flex-end;}
+.controls{display:flex;flex-wrap:nowrap;gap:10px;margin-bottom:14px;align-items:flex-end;}
 .ctrl-group{display:flex;flex-direction:column;gap:5px;}
 .ctrl-group label{font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.15em;color:var(--gold-dim);text-transform:uppercase;}
 .ctrl-group select{background:var(--bg3);border:1px solid var(--border2);color:var(--text-bright);padding:8px 11px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:.82rem;outline:none;transition:border-color .2s;min-width:220px;}
@@ -44,7 +44,7 @@ header .subtitle{font-style:italic;font-size:.92rem;color:var(--text-dim);margin
 .dt-cal-btn title-hint{display:none;}
 .dt-cal-btn::after{content:'📅';font-size:.9rem;}
 /* Invisible native datetime sits over the calendar icon only */
-.dt-native{position:absolute;right:0;top:0;width:40px;height:100%;opacity:0;cursor:pointer;z-index:2;}
+.dt-native{position:absolute;right:0;top:0;width:25px;height:100%;opacity:0;cursor:pointer;z-index:2;}
 
 /* ── TIME PICKER POPUP ── */
 .dt-time-btn{background:rgba(63,184,196,.12);border:none;border-left:1px solid var(--border2);color:var(--teal);padding:8px 11px;cursor:pointer;font-size:.9rem;transition:background .2s;white-space:nowrap;}
@@ -73,7 +73,7 @@ header .subtitle{font-style:italic;font-size:.92rem;color:var(--text-dim);margin
 .dt-popup-apply{width:100%;background:linear-gradient(135deg,rgba(201,168,76,.2),rgba(201,168,76,.08));border:1px solid var(--gold-dim);color:var(--gold2);padding:7px;border-radius:5px;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.1em;cursor:pointer;transition:all .2s;}
 .dt-popup-apply:hover{background:linear-gradient(135deg,rgba(201,168,76,.35),rgba(201,168,76,.15));border-color:var(--gold2);}
 
-.btn-row{display:flex;gap:7px;flex-wrap:wrap;}
+.btn-row{display:flex;gap:7px;flex-wrap:nowrap;}
 .btn{background:linear-gradient(135deg,rgba(201,168,76,.15),rgba(201,168,76,.05));border:1px solid var(--gold-dim);color:var(--gold2);padding:8px 16px;border-radius:6px;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.08em;cursor:pointer;transition:all .2s;white-space:nowrap;}
 .btn:hover{background:linear-gradient(135deg,rgba(201,168,76,.3),rgba(201,168,76,.1));border-color:var(--gold2);box-shadow:0 0 14px rgba(201,168,76,.2);}
 .btn.live-btn{background:linear-gradient(135deg,rgba(63,184,196,.2),rgba(63,184,196,.05));border-color:var(--teal-dim);color:var(--teal);}
@@ -317,6 +317,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
       <button class="btn live-btn" id="pauseBtn" onclick="toggleLive()" title="Freeze live updates so you can study the current positions without the clock ticking">⏸ Freeze Live</button>
       <button class="btn" onclick="stepDate(-1)">◀ Day</button>
       <button class="btn" onclick="stepDate(1)">Day ▶</button>
+      <button class="btn" onclick="stepMonth(-1)">◀ Month</button>
+      <button class="btn" onclick="stepMonth(1)">Month ▶</button>
       <button class="btn" onclick="stepDate(-365)">◀ Year</button>
       <button class="btn" onclick="stepDate(365)">Year ▶</button>
     </div>
@@ -1200,6 +1202,50 @@ function renderConstGrid(){
   });
 }
 
+// ── CURRENT MASA (lunar-month-aware, Adhika-aware) ────────────
+function getCurrentMasa(date){
+  // Scan back up to 65 days in 3-hour steps to find last 2 new moons
+  // New moon = elongation (Moon-Sun) crosses 0° (goes from ~359° down to ~0°)
+  const newMoons=[];
+  let prev=null;
+  for(let i=0;i<=65*8&&newMoons.length<2;i++){
+    const d=new Date(date.getTime()-i*3*3600000);
+    const pos=computePos(d,currentAyan);
+    const elong=((pos.moon.lon-pos.sun.lon)%360+360)%360;
+    if(prev!==null&&prev<30&&elong>330){
+      // Elongation jumped high→low going backwards = new moon crossing
+      // Use midpoint for better accuracy
+      const dmid=new Date(d.getTime()+1.5*3600000);
+      const pmid=computePos(dmid,currentAyan);
+      // Protect against 359.9°/0.1° boundary: treat 359–360 as Meena (last sign)
+      let sl=pmid.sun.lon;
+      // If Sun is within 0.5° of 0° (sign boundary), check 1h earlier for sign
+      if(sl<0.5||sl>359.5){
+        const dearlier=new Date(dmid.getTime()-3600000);
+        sl=computePos(dearlier,currentAyan).sun.lon;
+      }
+      const si=gsi(sl);
+      newMoons.push({si,date:dmid});
+    }
+    prev=elong;
+  }
+  if(newMoons.length===0){
+    const si=(gsi(computePos(date,currentAyan).sun.lon)+1)%12;
+    return{name:MASA[si],isAdhika:false};
+  }
+  const lastNM=newMoons[0];   // most recent new moon
+  const prevNM=newMoons[1];   // one before that (may be undefined)
+
+  // Adhika: both new moons in same solar sign
+  const isAdhika=prevNM&&prevNM.si===lastNM.si;
+
+  // Masa name: always from the FIRST (prevNM) of the pair for Adhika,
+  // or from lastNM for normal month. This ensures the name stays "Chaitra" 
+  // for both halves of Adhika Chaitra even if Sun crossed a sign at the 2nd NM.
+  const nameSI=isAdhika?prevNM.si:lastNM.si;
+  return{name:MASA[(nameSI+1)%12],isAdhika:!!isAdhika};
+}
+
 function renderPanchang(){
   if(!positions.moon||!positions.sun)return;
   const ml=positions.moon.lon,sl=positions.sun.lon;
@@ -1213,10 +1259,11 @@ function renderPanchang(){
   const varaLord=VARA_LORD[currentDate.getUTCDay()];
   const varaNat=VARA_NATURE[currentDate.getUTCDay()];
   const sunSign=SIGNS[gsi(sl)],moonSign=SIGNS[gsi(ml)];
-  // Masa: Vaishakha starts when Sun enters Aries (Mesha) and Purnima Moon is near Vishakha.
-  // Offset by +1 from Sun sign index gives correct masa for most of the month.
-  const masaIdx=(gsi(sl)+1)%12;
-  const masa=MASA[masaIdx],ritu=RITU[gsi(sl)];
+  // Masa: determined by the Sun's sign at the LAST Amavasya (new moon).
+  // If the previous new moon was ALSO in the same solar sign → we are in Adhika masa.
+  const masaResult=getCurrentMasa(currentDate);
+  const masa=masaResult.name, isAdhikaMasa=masaResult.isAdhika;
+  const ritu=RITU[gsi(sl)];
   const moonPada=gpad(ml),sunPada=gpad(sl);
   // Approximate sunrise/sunset in UTC (simple: sun at 0° alt, ~12 hours either side of noon)
   // Real sunrise varies. We note it's approximate.
@@ -1280,8 +1327,8 @@ function renderPanchang(){
   <div class="panc-row">
     <div class="panc-card">
       <div class="panc-title">Masa (Lunar Month)</div>
-      <div class="panc-value">${masa}</div>
-      <div class="panc-sub">Solar month: ${sunSign.en}<br>Vedic month follows Moon</div>
+      <div class="panc-value">${isAdhikaMasa?'🌙 Adhika ':''}<b>${masa}</b></div>
+      <div class="panc-sub">Solar month: ${sunSign.en}<br>${isAdhikaMasa?'⚠ Intercalary month — auspicious events postponed':'Vedic month follows Moon'}</div>
     </div>
     <div class="panc-card">
       <div class="panc-title">Ritu (Season)</div>
@@ -1347,7 +1394,7 @@ function renderPanchang(){
       <div class="panc-card"><div class="panc-title">Paksha</div><div class="panc-value">${paksha}</div><div class="panc-sub">Tithi ${tithi.num} / 30<br>${tithi.num<=15?'Waxing · growing energy':'Waning · releasing energy'}</div></div>
       <div class="panc-card"><div class="panc-title">Moon in Rashi</div><div class="panc-value">${moonSign.sym} ${moonSign.en}</div><div class="panc-sub">${moonSign.sa} · ${dms(ml%30)}<br>Nak: ${moonNak.name} P${moonPada}</div></div>
       <div class="panc-card"><div class="panc-title">Sun in Rashi</div><div class="panc-value">${sunSign.sym} ${sunSign.en}</div><div class="panc-sub">${sunSign.sa} · ${dms(sl%30)}<br>Nak: ${sunNak.name} P${sunPada}</div></div>
-      <div class="panc-card"><div class="panc-title">Masa · Ritu</div><div class="panc-value">${masa}</div><div class="panc-sub">${ritu}<br>Lunar month name</div></div>
+      <div class="panc-card"><div class="panc-title">Masa · Ritu</div><div class="panc-value">${isAdhikaMasa?'🌙 Adhika ':''}${masa}</div><div class="panc-sub">${ritu}${isAdhikaMasa?'<br>⚠ Adhika (Intercalary)':''}</div></div>
       <div class="panc-card"><div class="panc-title">Ayana</div><div class="panc-value">${sl<180?'Uttarayana ☀':'Dakshinayana 🌙'}</div><div class="panc-sub">${sl<180?'Sun heading north':'Sun heading south'}</div></div>
       <div class="panc-card ${tithi.name==='Ekadashi'?'timing':''}"><div class="panc-title">Ekadashi</div><div class="panc-value">${tithi.name==='Ekadashi'?'✓ Today!':'~'+Math.round(Math.abs(tithi.num<=11?11-tithi.num:26-tithi.num))+' tithis away'}</div><div class="panc-sub">11th tithi · Vishnu fasting</div></div>
       <div class="panc-card ${tithi.name==='Purnima'||tithi.name==='Amavasya'?'timing':''}"><div class="panc-title">Purnima/Amavasya</div><div class="panc-value">${tithi.name==='Purnima'?'🌕 Today!':tithi.name==='Amavasya'?'🌑 Today!':tithi.num<15?fmtHours((15-tithi.num)*12/0.549)+' away':fmtHours((30-tithi.num)*12/0.549)+' away'}</div><div class="panc-sub">Full / New Moon</div></div>
@@ -1910,6 +1957,14 @@ function stepDate(days){
   isPaused=true;liveMode=false;stopLive();
   document.getElementById('pauseBtn').textContent='▶ Resume Live';
   currentDate=new Date(currentDate.getTime()+days*86400000);
+  syncDTInputs();render();
+}
+function stepMonth(months){
+  isPaused=true;liveMode=false;stopLive();
+  document.getElementById('pauseBtn').textContent='▶ Resume Live';
+  const d=new Date(currentDate.getTime());
+  d.setUTCMonth(d.getUTCMonth()+months);
+  currentDate=d;
   syncDTInputs();render();
 }
 function toggleLive(){
